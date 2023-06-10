@@ -3,6 +3,8 @@ import re
 import csv
 from plotly_calplot import calplot
 import plotly.graph_objects as go
+import numpy as np
+from scipy.stats import chi2, chi2_contingency
 
 moodDict = {
     'rad': 10,
@@ -12,8 +14,42 @@ moodDict = {
     'awful': -10
 }
 
+red = '#FE978E'
+green = '#B0CFB0'
+gray = '#d3d3d3'
+
+def chi_square_test(boolean_values, integer_values):
+    # Get unique categories and sort them
+    categories = sorted(list(set(integer_values)))
+
+    # Construct the contingency table
+    contingency_table = np.zeros((2, len(categories)), dtype=np.int64)
+
+    for boolean, integer in zip(boolean_values, integer_values):
+        boolean_index = 0 if boolean else 1
+        integer_index = categories.index(integer)
+        contingency_table[boolean_index, integer_index] += 1
+
+    # Perform the chi-square test
+    chi2, p_value, dof, expected = chi2_contingency(contingency_table)
+
+    # Print the results
+    '''
+    print("Chi-square statistic:", chi2)
+    print("p-value:", p_value)
+    print("Degrees of freedom:", dof)
+    print("Expected frequencies:")
+    print(expected)
+    '''
+
+    # Return the results as a tuple
+    return chi2, p_value, dof, expected
+
+
 class Daylio:
     def __init__(self, csv_file):
+
+        # Open csv, save data in a dict with keys corresponding to the column names of the csv
         self.data = {}
         with open(csv_file, 'r', encoding='utf-8-sig') as file:
             reader = csv.DictReader(file)
@@ -22,60 +58,57 @@ class Daylio:
             for row in reader:
                 for column_name, value in row.items():
                     self.data[column_name.lower()].append(value)  # Append column data to the list
+
+        # Reformat the 'activities' data
+        # First, get a list of all phrases in 'activities' column
         self.data['activities'] = [entry.lower() for entry in self.data['activities']]
-
-    def get_activ(self):
-        word_set = set()
-
+        activity_set = set()
         for item in self.data['activities']:
-            words = item.split(' | ')
-            for word in words:
-                word = word.lower()
-                word_set.update([word])
+            activities = item.split(' | ')
+            for activity in activities:
+                activity_set.update([activity])
+        self.activities = list(activity_set)
 
-        unique_words = list(word_set)
-        return unique_words
+        # Next, add these words as keys to a dict and populate each entry, update self.data
+        act_dict = {}
+        for activity in self.activities:
+            act_dict[activity] = []
+            for day in self.data['activities']:
+                act_dict[activity].append(int(bool(re.search(r'\b' + activity + r'\b', day))))
+        self.data['activities'] = act_dict
 
+        self.data['mood'] = [moodDict[day] for day in self.data['mood']]
 
-    def calendar_plot(self, key, phrase=""):
-        if key in self.data.keys():
-            day_data = []
-            for day in self.data[key]:
-                day_data.append(int(bool(re.search(r'\b' + phrase + r'\b', day))))
+        self.data['full_date'] = pd.to_datetime(self.data['full_date'])
 
-            dates = pd.to_datetime(self.data['full_date'])
-            events = pd.Series(day_data, index=dates)
-            df_log = pd.DataFrame({
-                "dates": dates,
-                "events": events,
-            })
+    def calendar_plot(self, activity):
+        dates = self.data['full_date']
+        events = pd.Series(self.data['activities'][activity], index=dates)
+        df_log = pd.DataFrame({
+            "dates": dates,
+            "events": events,
+        })
 
-            fig = calplot(
-                df_log,
-                x="dates",
-                y="events",
-                name = phrase,
-                title = phrase + ' (in ' +  key + ')',
-                years_title = True,
-                dark_theme=False
-            )
-            return fig
-
-        else:
-            print('Invalid key!')
+        fig = calplot(
+            df_log,
+            x="dates",
+            y="events",
+            name=activity,
+            title=activity,
+            years_title=True,
+            dark_theme=False
+        )
+        return fig
 
     def mood_plot(self):
-        day_data = []
-        for day in self.data['mood']:
-            day_data.append(moodDict[day])
-        dates = pd.to_datetime(self.data['full_date'])
-        events = pd.Series(day_data, index=dates)
+        dates = self.data['full_date']
+        events = pd.Series(self.data['mood'], index=dates)
         df_log = pd.DataFrame({
             "dates": dates,
             "events": events,
         })
         df_weekly_avg = df_log.resample('W').mean()
-        df_weekly_avg['week_middle_date'] = df_weekly_avg.index + pd.offsets.DateOffset(weekday=3)
+        df_weekly_avg['week_middle_date'] = df_weekly_avg.index + pd.offsets.DateOffset(weekday=0)
         df_weekly_avg.reset_index(drop=True, inplace=True)
 
         scatter_trace = go.Scatter(
@@ -84,7 +117,8 @@ class Daylio:
             mode='markers',
             marker=dict(
                 symbol='circle',
-                size=8
+                size=6,
+                color=[red if event < 0 else green if event > 0 else gray for event in df_log['events']],
             )
         )
 
@@ -102,9 +136,9 @@ class Daylio:
                     x1=date,
                     y1=event,
                     line=dict(
-                        color='red' if event < 0 else 'green',
-                        width=1,
-                        dash='dash'
+                        color=red if event < 0 else green,
+                        width=3
+                        #dash='dash'
                     )
                 )
             )
@@ -121,7 +155,7 @@ class Daylio:
         )
         fig = go.Figure(data=[scatter_trace, line_trace], layout=layout)
 
-        fig.update_yaxes(range=[-10, 10])
+        fig.update_yaxes(range=[-11, 11])
 
         fig.update_layout(
             title="Mood over Time",
@@ -129,5 +163,13 @@ class Daylio:
             yaxis_title="Mood"
         )
         return fig
+
+    def chi_square(self, activity, mood, significance_level=0.05):
+        chi2_value, p_value, dof, expected = chi_square_test(self.data['activities'][activity], self.data[mood])
+        critical_value = chi2.ppf(1 - significance_level, dof)
+        judgement = "STATISTICALLY SIGNIFICANT" if chi2_value > critical_value else "NOT STATISTICALLY SIGNIFICANT"
+        return chi2_value, p_value, dof, judgement
+
+
 
 
