@@ -4,11 +4,10 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="0288e473-a3e0-41ff-8894-e330c143f542" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/activity_groups.json" afterDir="false" />
+    <list default="true" id="0288e473-a3e0-41ff-8894-e330c143f542" name="Changes" comment="added data grouping">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/activity_groups.json" beforeDir="false" afterPath="$PROJECT_DIR$/activity_groups.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/daylio.py" beforeDir="false" afterPath="$PROJECT_DIR$/daylio.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -43,6 +42,14 @@
       <option name="presentableId" value="Default" />
       <updated>1686324839939</updated>
     </task>
+    <task id="LOCAL-00001" summary="added data grouping">
+      <created>1687922859981</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1687922859981</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -55,5 +62,9 @@
         </entry>
       </map>
     </option>
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="added data grouping" />
+    <option name="LAST_COMMIT_MESSAGE" value="added data grouping" />
   </component>
 </project>

@@ -1,6 +1,6 @@
 {
   "energy": ["tired","normal energy", "energetic"],
   "stress": ["vibing", "normal stress", "stressful"],
-  "work": ["leave early", "end on time", "overtime day"],
+  "work": ["leave early", "end on time", "overtime"],
   "sleep": ["bad sleep", "medium sleep","good sleep"]
 }

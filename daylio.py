@@ -77,6 +77,7 @@ class Daylio:
         for entry in entries_to_add:
             self.activities_culled.append(entry)
         self.activities_culled.reverse()
+        self.activity_groups = list(json_data.keys())
 
         # Next, add these words as keys to a dict and populate each entry, update self.data
         act_dict = {}
@@ -122,18 +123,25 @@ class Daylio:
             "events": events,
         })
 
+        #colorscale
+        if activity in self.activity_groups:
+            color_scale = [(0.00, red),   (0.33, gray),
+                (0.33, gray), (0.66, gray),
+                (0.66, green),  (1.00, green)]
+        else:
+            color_scale = [(0.00, gray), (0.33, gray),
+                           (0.33, gray), (0.66, green),
+                           (0.66, green), (1.00, green)]
+
         # noinspection PyTypeChecker
         fig = calplot(
             df_log,
             x="dates",
             y="events",
             name=activity,
-            title=activity,
             years_title=True,
             dark_theme=False,
-            colorscale=[(0.00, red),   (0.33, gray),
-                (0.33, gray), (0.66, gray),
-                (0.66, green),  (1.00, green)]
+            colorscale=color_scale
         )
         return fig
 
@@ -144,11 +152,25 @@ class Daylio:
             "dates": dates,
             "events": events,
         })
-        df_log["rolling_avg"] = df_log["events"].rolling(window='7D', min_periods=1).mean()
 
-        '''df_weekly_avg = df_log.resample('W').mean()
-        df_weekly_avg['week_middle_date'] = df_weekly_avg.index + pd.offsets.DateOffset(weekday=0)
-        df_weekly_avg.reset_index(drop=True, inplace=True)'''
+        df_log["dates"] = pd.to_datetime(
+            df_log["dates"])  # Convert 'dates' column to datetime if not already in datetime format
+        df_log.sort_values("dates", inplace=True)  # Sort the DataFrame by 'dates' column in ascending order
+
+        rolling_avg = []
+        avg_dates = []
+
+        for i in range(len(df_log['events'])):
+            if i < 6:
+                rolling_avg.append(np.nan)  # Assign NaN to initial rows
+                avg_dates.append(np.nan)
+            else:
+                avg = np.mean(df_log['events'][i - 6:i + 1])
+                rolling_avg.append(avg)
+                avg_dates.append(df_log['dates'].iloc[i])
+
+        df_log['rolling_avg'] = rolling_avg
+        df_log['avg_dates'] = avg_dates
 
         scatter_trace = go.Scatter(
             x=df_log['dates'],
@@ -162,7 +184,7 @@ class Daylio:
             )
         )
 
-        line_trace = go.Scatter(x=df_log['dates'], y=df_log["rolling_avg"],
+        line_trace = go.Scatter(x=df_log['avg_dates'], y=df_log["rolling_avg"],
                                 mode='lines', name='Weekly Average')
 
         # Vertical lines
