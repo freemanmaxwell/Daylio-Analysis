@@ -5,6 +5,9 @@ from plotly_calplot import calplot
 import plotly.graph_objects as go
 import numpy as np
 from scipy.stats import chi2, chi2_contingency
+import json
+
+json_file_path = "activity_groups.json"
 
 moodDict = {
     'rad': 10,
@@ -15,8 +18,10 @@ moodDict = {
 }
 
 red = '#FE978E'
-green = '#B0CFB0'
+green = '#95d195' #'#B0CFB0'
+dark_green = '#1b4a1b'
 gray = '#d3d3d3'
+yellow = '#FFFACD'
 
 def chi_square_test(boolean_values, integer_values):
     # Get unique categories and sort them
@@ -32,15 +37,6 @@ def chi_square_test(boolean_values, integer_values):
 
     # Perform the chi-square test
     chi2, p_value, dof, expected = chi2_contingency(contingency_table)
-
-    # Print the results
-    '''
-    print("Chi-square statistic:", chi2)
-    print("p-value:", p_value)
-    print("Degrees of freedom:", dof)
-    print("Expected frequencies:")
-    print(expected)
-    '''
 
     # Return the results as a tuple
     return chi2, p_value, dof, expected
@@ -68,6 +64,19 @@ class Daylio:
             for activity in activities:
                 activity_set.update([activity])
         self.activities = list(activity_set)
+        self.activities_culled = self.activities
+
+        # Next, remove grouped entries, replacing with a single entry for each group
+        with open(json_file_path, "r") as file:
+            json_data = json.load(file)
+        entries_to_remove = [element for sublist in list(json_data.values()) for element in sublist]
+        entries_to_add = list(json_data.keys())
+        for entry in entries_to_remove:
+            if entry in self.activities:
+                self.activities_culled.remove(entry)
+        for entry in entries_to_add:
+            self.activities_culled.append(entry)
+        self.activities_culled.reverse()
 
         # Next, add these words as keys to a dict and populate each entry, update self.data
         act_dict = {}
@@ -75,7 +84,31 @@ class Daylio:
             act_dict[activity] = []
             for day in self.data['activities']:
                 act_dict[activity].append(int(bool(re.search(r'\b' + activity + r'\b', day))))
+
+        act_culled_dict = {}
+        for activity in self.activities_culled:
+            act_culled_dict[activity] = []
+            if activity in json_data.keys():
+                all_ranks_list = []
+                for i, rank in enumerate(json_data[activity]):
+                    rank_list = []
+                    for day in self.data['activities']:
+                        rank_list.append((i + 1) * int(bool(re.search(r'\b' + rank + r'\b', day))))
+                    all_ranks_list.append(rank_list)
+                final_ranked_list = [sum(sublist) for sublist in zip(*all_ranks_list)]
+                for i, entry in enumerate(final_ranked_list):
+                    if entry == 0:
+                        final_ranked_list[i] = float('NaN')
+                    else:
+                        final_ranked_list[i] = entry - 1
+                act_culled_dict[activity].extend(final_ranked_list)
+            else:
+                for day in self.data['activities']:
+                    act_culled_dict[activity].append(int(bool(re.search(r'\b' + activity + r'\b', day))))
+
         self.data['activities'] = act_dict
+
+        self.data['activities_culled'] = act_culled_dict
 
         self.data['mood'] = [moodDict[day] for day in self.data['mood']]
 
@@ -83,12 +116,13 @@ class Daylio:
 
     def calendar_plot(self, activity):
         dates = self.data['full_date']
-        events = pd.Series(self.data['activities'][activity], index=dates)
+        events = pd.Series(self.data['activities_culled'][activity], index=dates)
         df_log = pd.DataFrame({
             "dates": dates,
             "events": events,
         })
 
+        # noinspection PyTypeChecker
         fig = calplot(
             df_log,
             x="dates",
@@ -96,7 +130,10 @@ class Daylio:
             name=activity,
             title=activity,
             years_title=True,
-            dark_theme=False
+            dark_theme=False,
+            colorscale=[(0.00, red),   (0.33, gray),
+                (0.33, gray), (0.66, gray),
+                (0.66, green),  (1.00, green)]
         )
         return fig
 
@@ -107,14 +144,17 @@ class Daylio:
             "dates": dates,
             "events": events,
         })
-        df_weekly_avg = df_log.resample('W').mean()
+        df_log["rolling_avg"] = df_log["events"].rolling(window='7D', min_periods=1).mean()
+
+        '''df_weekly_avg = df_log.resample('W').mean()
         df_weekly_avg['week_middle_date'] = df_weekly_avg.index + pd.offsets.DateOffset(weekday=0)
-        df_weekly_avg.reset_index(drop=True, inplace=True)
+        df_weekly_avg.reset_index(drop=True, inplace=True)'''
 
         scatter_trace = go.Scatter(
             x=df_log['dates'],
             y=df_log['events'],
             mode='markers',
+            name='Daily Value',
             marker=dict(
                 symbol='circle',
                 size=6,
@@ -122,7 +162,7 @@ class Daylio:
             )
         )
 
-        line_trace = go.Scatter(x=df_weekly_avg['week_middle_date'], y=df_weekly_avg['events'],
+        line_trace = go.Scatter(x=df_log['dates'], y=df_log["rolling_avg"],
                                 mode='lines', name='Weekly Average')
 
         # Vertical lines
@@ -147,10 +187,12 @@ class Daylio:
         layout = go.Layout(
             shapes=line_shapes,
             xaxis=dict(
-                title='Dates'
+                #title='Dates'
             ),
             yaxis=dict(
-                title='Events'
+                title='Events',
+                tickvals=[-10, -5, 0, 5, 10],
+                ticktext=['awful', 'bad', 'meh', 'good', 'rad']
             )
         )
         fig = go.Figure(data=[scatter_trace, line_trace], layout=layout)
@@ -158,10 +200,12 @@ class Daylio:
         fig.update_yaxes(range=[-11, 11])
 
         fig.update_layout(
-            title="Mood over Time",
-            xaxis_title="Date",
+            #title="Mood over Time",
+            #xaxis_title="Date",
             yaxis_title="Mood"
         )
+        tick_labels = ['awful', 'bad', 'meh', 'good', 'rad']
+        fig.update_yaxes(ticktext=tick_labels)
         return fig
 
     def chi_square(self, activity, mood, significance_level=0.05):
