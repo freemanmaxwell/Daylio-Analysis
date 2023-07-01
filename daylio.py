@@ -78,6 +78,7 @@ class Daylio:
             self.activities_culled.append(entry)
         self.activities_culled.reverse()
         self.activity_groups = list(json_data.keys())
+        self.json_data = json_data
 
         # Next, add these words as keys to a dict and populate each entry, update self.data
         act_dict = {}
@@ -145,89 +146,185 @@ class Daylio:
         )
         return fig
 
-    def mood_plot(self):
-        dates = self.data['full_date']
-        events = pd.Series(self.data['mood'], index=dates)
-        df_log = pd.DataFrame({
-            "dates": dates,
-            "events": events,
-        })
+    def time_plot(self, selection):
+        if selection == 'mood':
+            dates = self.data['full_date']
+            events = pd.Series(self.data['mood'], index=dates)
+            df_log = pd.DataFrame({
+                "dates": dates,
+                "events": events,
+            })
 
-        df_log["dates"] = pd.to_datetime(
-            df_log["dates"])  # Convert 'dates' column to datetime if not already in datetime format
-        df_log.sort_values("dates", inplace=True)  # Sort the DataFrame by 'dates' column in ascending order
+            df_log["dates"] = pd.to_datetime(
+                df_log["dates"])  # Convert 'dates' column to datetime if not already in datetime format
+            df_log.sort_values("dates", inplace=True)  # Sort the DataFrame by 'dates' column in ascending order
 
-        rolling_avg = []
-        avg_dates = []
+            rolling_avg = []
+            avg_dates = []
 
-        for i in range(len(df_log['events'])):
-            if i < 6:
-                rolling_avg.append(np.nan)  # Assign NaN to initial rows
-                avg_dates.append(np.nan)
-            else:
-                avg = np.mean(df_log['events'][i - 6:i + 1])
-                rolling_avg.append(avg)
-                avg_dates.append(df_log['dates'].iloc[i])
+            for i in range(len(df_log['events'])):
+                if i < 6:
+                    rolling_avg.append(np.nan)  # Assign NaN to initial rows
+                    avg_dates.append(np.nan)
+                else:
+                    avg = np.mean(df_log['events'][i - 6:i + 1])
+                    rolling_avg.append(avg)
+                    avg_dates.append(df_log['dates'].iloc[i])
 
-        df_log['rolling_avg'] = rolling_avg
-        df_log['avg_dates'] = avg_dates
+            df_log['rolling_avg'] = rolling_avg
+            df_log['avg_dates'] = avg_dates
 
-        scatter_trace = go.Scatter(
-            x=df_log['dates'],
-            y=df_log['events'],
-            mode='markers',
-            name='Daily Value',
-            marker=dict(
-                symbol='circle',
-                size=6,
-                color=[red if event < 0 else green if event > 0 else gray for event in df_log['events']],
-            )
-        )
-
-        line_trace = go.Scatter(x=df_log['avg_dates'], y=df_log["rolling_avg"],
-                                mode='lines', name='Weekly Average')
-
-        # Vertical lines
-        line_shapes = []
-        for date, event in zip(df_log['dates'], df_log['events']):
-            line_shapes.append(
-                dict(
-                    type='line',
-                    x0=date,
-                    y0=0,
-                    x1=date,
-                    y1=event,
-                    line=dict(
-                        color=red if event < 0 else green,
-                        width=3
-                        #dash='dash'
-                    )
+            scatter_trace = go.Scatter(
+                x=df_log['dates'],
+                y=df_log['events'],
+                mode='markers',
+                name='Daily Value',
+                marker=dict(
+                    symbol='circle',
+                    size=6,
+                    color=[red if event < 0 else green if event > 0 else gray for event in df_log['events']],
                 )
             )
 
-        # Layout
-        layout = go.Layout(
-            shapes=line_shapes,
-            xaxis=dict(
-                #title='Dates'
-            ),
-            yaxis=dict(
-                title='Events',
-                tickvals=[-10, -5, 0, 5, 10],
-                ticktext=['awful', 'bad', 'meh', 'good', 'rad']
+            line_trace = go.Scatter(x=df_log['avg_dates'], y=df_log["rolling_avg"],
+                                    mode='lines',
+                                    name='Weekly Average',
+                                    line=dict(width=3)
+                                    )
+
+            # Vertical lines
+            line_shapes = []
+            for date, event in zip(df_log['dates'], df_log['events']):
+                line_shapes.append(
+                    dict(
+                        type='line',
+                        x0=date,
+                        y0=0,
+                        x1=date,
+                        y1=event,
+                        line=dict(
+                            color=red if event < 0 else green,
+                            width=3
+                            #dash='dash'
+                        )
+                    )
+                )
+
+            # Layout
+            layout = go.Layout(
+                shapes=line_shapes,
+                xaxis=dict(
+                    #title='Dates'
+                ),
+                yaxis=dict(
+                    title='Events',
+                    tickvals=[-10, -5, 0, 5, 10],
+                    ticktext=['awful', 'bad', 'meh', 'good', 'rad']
+                )
             )
-        )
-        fig = go.Figure(data=[scatter_trace, line_trace], layout=layout)
+            fig = go.Figure(data=[scatter_trace, line_trace], layout=layout)
 
-        fig.update_yaxes(range=[-11, 11])
+            fig.update_yaxes(range=[-11, 11])
 
-        fig.update_layout(
-            #title="Mood over Time",
-            #xaxis_title="Date",
-            yaxis_title="Mood"
-        )
-        tick_labels = ['awful', 'bad', 'meh', 'good', 'rad']
-        fig.update_yaxes(ticktext=tick_labels)
+            fig.update_layout(
+                #title="Mood over Time",
+                #xaxis_title="Date",
+                yaxis_title="Mood"
+            )
+            tick_labels = ['awful', 'bad', 'meh', 'good', 'rad']
+            fig.update_yaxes(ticktext=tick_labels)
+        else:
+            dates = self.data['full_date']
+            events = self.data['activities_culled'][selection]
+            events = events - np.ones(len(events))
+
+            events_series = pd.Series(events)
+            events = events_series.dropna()
+            dates = dates[events.index]
+
+            df_log = pd.DataFrame({
+                "dates": dates,
+                "events": events,
+            })
+            df_log["dates"] = pd.to_datetime(
+                df_log["dates"])  # Convert 'dates' column to datetime if not already in datetime format
+            df_log.sort_values("dates", inplace=True)  # Sort the DataFrame by 'dates' column in ascending order
+
+            rolling_avg = []
+            avg_dates = []
+
+            for i in range(len(df_log['events'])):
+                if i < 6:
+                    rolling_avg.append(np.nan)  # Assign NaN to initial rows
+                    avg_dates.append(np.nan)
+                else:
+                    avg = np.mean(df_log['events'][i - 6:i + 1])
+                    rolling_avg.append(avg)
+                    avg_dates.append(df_log['dates'].iloc[i])
+
+            df_log['rolling_avg'] = rolling_avg
+            df_log['avg_dates'] = avg_dates
+
+            scatter_trace = go.Scatter(
+                x=df_log['dates'],
+                y=df_log['events'],
+                mode='markers',
+                name='Daily Value',
+                marker=dict(
+                    symbol='circle',
+                    size=6,
+                    color=[red if event < 0 else green if event > 0 else gray for event in df_log['events']],
+                )
+            )
+
+            line_trace = go.Scatter(x=df_log['avg_dates'], y=df_log["rolling_avg"],
+                                    mode='lines',
+                                    name='Weekly Average',
+                                    line=dict(width=3)
+                                    )
+
+            # Vertical lines
+            line_shapes = []
+            for date, event in zip(df_log['dates'], df_log['events']):
+                line_shapes.append(
+                    dict(
+                        type='line',
+                        x0=date,
+                        y0=0,
+                        x1=date,
+                        y1=event,
+                        line=dict(
+                            color=red if event < 0 else green,
+                            width=3
+                            # dash='dash'
+                        )
+                    )
+                )
+            print(self.json_data[selection])
+            # Layout
+            layout = go.Layout(
+                shapes=line_shapes,
+                xaxis=dict(
+                    # title='Dates'
+                ),
+                yaxis=dict(
+                    title='Events',
+                    tickvals=[-1, 0, 1],
+                    ticktext=self.json_data[selection]
+                )
+            )
+
+            fig = go.Figure(data=[scatter_trace, line_trace], layout=layout)
+
+            fig.update_yaxes(range=[-2, 2])
+
+            fig.update_layout(
+                # title="Mood over Time",
+                # xaxis_title="Date",
+                yaxis_title=selection
+            )
+            tick_labels = self.json_data[selection]
+            fig.update_yaxes(ticktext=tick_labels)
         return fig
 
     def chi_square(self, activity, mood, significance_level=0.05):

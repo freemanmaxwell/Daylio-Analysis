@@ -1,17 +1,21 @@
 from daylio import Daylio
 import streamlit as st
 
-dy = Daylio('data/daylio_export_2023_06_27.csv')
+dy = Daylio('data/daylio_export_2023_06_30.csv')
 
 st.title('Daylio Mood Tracker Analysis')
 
 st.header('Mood Trend over Time')
 st.radio('Timescale', ['Month', 'Year', 'All'], horizontal=True, label_visibility='hidden')
-st.plotly_chart(dy.mood_plot())
+activity_groups = list(dy.activity_groups)
+activity_groups.append('mood')
+activity_groups.reverse()
+selected_group = st.selectbox('Select Activity', activity_groups)
+st.plotly_chart(dy.time_plot(selected_group))
 
 st.header('Activities Record')
-option = st.selectbox('Select Activity', dy.activities_culled)
-st.plotly_chart(dy.calendar_plot(option))
+cal_option = st.selectbox('Select Activity', dy.activities_culled)
+st.plotly_chart(dy.calendar_plot(cal_option))
 
 st.header('Chi-Square Significance Test')
 col5, col1, col2, col3, col4 = st.columns([0.1, 0.25, 0.2, 0.05, 0.2])
